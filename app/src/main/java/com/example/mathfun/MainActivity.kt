@@ -1,6 +1,7 @@
 package com.example.mathfun
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
@@ -92,6 +93,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setTextColor(Color.rgb(103, 58, 183))
             gravity = Gravity.CENTER
             setPadding(8, 8, 8, 12)
+        }, matchWrap())
+
+        // Parent controls stay visible at the top and require a confirmation phrase.
+        root.addView(colorButton("Parent controls · Reset progress", palette[3]) {
+            showParentResetDialog()
         }, matchWrap())
 
         val languageRow = row()
@@ -214,15 +220,49 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         root.addView(scoreView, matchWrap())
 
-        root.addView(colorButton("Parent: reset progress", palette[3]) {
-            score = 0
-            streak = 0
-            level = 1
-            prefs.edit().clear().apply()
-            levelSpinner.setSelection(0)
-            newQuestion()
-        }, matchWrap())
         updateAnswerMode()
+    }
+
+    private fun showParentResetDialog() {
+        val confirmationInput = EditText(this).apply {
+            hint = "Type PARENTS to confirm"
+            textSize = 18f
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(28, 8, 28, 0)
+            addView(TextView(this@MainActivity).apply {
+                text = "This resets the score and difficulty level.\nType PARENTS to continue."
+                textSize = 16f
+                setTextColor(Color.rgb(55, 71, 79))
+            }, matchWrap())
+            addView(confirmationInput, matchWrap())
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Parent confirmation")
+            .setView(container)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Reset progress", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (confirmationInput.text.toString().trim().equals("PARENTS", ignoreCase = true)) {
+                    score = 0
+                    streak = 0
+                    level = 1
+                    prefs.edit().clear().apply()
+                    levelSpinner.setSelection(0)
+                    newQuestion()
+                    dialog.dismiss()
+                } else {
+                    confirmationInput.error = "Type PARENTS to confirm"
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun label(text: String) = TextView(this).apply {
