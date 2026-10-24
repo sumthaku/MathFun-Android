@@ -247,7 +247,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             streak++
             choiceButtons.forEach { it.isEnabled = false }
             val message = if (language == "Hindi") "शाबाश! सही जवाब!" else "Great job! Correct!"
-            val earnedMedal = streak % 2 == 0
+            val earnedMedal = true
             feedbackView.text = if (earnedMedal) {
                 if (language == "Hindi") "बहुत खूब! तुम्हारा मेडल!" else "Amazing! You earned a medal!"
             } else message
