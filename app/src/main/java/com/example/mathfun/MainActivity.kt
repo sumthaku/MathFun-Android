@@ -5,6 +5,10 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.Gravity
 import android.view.View
+import android.view.animation.Animation
+import android.view.animation.AnimationSet
+import android.view.animation.RotateAnimation
+import android.view.animation.ScaleAnimation
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -17,7 +21,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var root: LinearLayout
     private lateinit var questionView: TextView
     private lateinit var feedbackView: TextView
+    private lateinit var resultView: TextView
     private lateinit var scoreView: TextView
+    private lateinit var nextButton: Button
+    private lateinit var retryButton: Button
+    private lateinit var skipButton: Button
+    private lateinit var choiceButtons: List<Button>
     private lateinit var prefs: SharedPreferences
     private var tts: TextToSpeech? = null
     private var language = "English"
@@ -26,8 +35,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var score = 0
     private var streak = 0
     private var answer = 0
-    private var questionCount = 0
     private var soundEnabled = true
+    private var answered = false
     private val choices = mutableListOf<Int>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,13 +59,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun speak(text: String) {
-        if (!soundEnabled) return
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "mathfun-feedback")
+        if (soundEnabled) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "mathfun-feedback")
     }
 
     private fun buildUi() {
-        val scroll = ScrollView(this)
-        scroll.isFillViewport = true
+        val scroll = ScrollView(this).apply { isFillViewport = true }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -65,17 +72,19 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         scroll.addView(root)
         setContentView(scroll)
 
-        val title = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "Math Fun"
             textSize = 32f
             gravity = Gravity.CENTER
-        }
-        root.addView(title, matchWrap())
+        }, matchWrap())
 
         val languageRow = row()
         languageRow.addView(button("English") { language = "English"; setTtsLanguage(); newQuestion() }, weighted())
         languageRow.addView(button("हिन्दी") { language = "Hindi"; setTtsLanguage(); newQuestion() }, weighted())
-        languageRow.addView(button("🔊 Sound") { soundEnabled = !soundEnabled; feedbackView.text = if (soundEnabled) "Sound on" else "Sound off" }, weighted())
+        languageRow.addView(button("🔊 Sound") {
+            soundEnabled = !soundEnabled
+            feedbackView.text = if (soundEnabled) "Sound on" else "Sound off"
+        }, weighted())
         root.addView(languageRow, matchWrap())
 
         val operationRow = row()
@@ -100,23 +109,39 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         feedbackView = TextView(this).apply {
             textSize = 23f
             gravity = Gravity.CENTER
-            setPadding(8, 6, 8, 10)
+            setPadding(8, 6, 8, 4)
         }
         root.addView(feedbackView, matchWrap())
 
-        val choicesRow1 = row()
-        val choicesRow2 = row()
-        val answerButtons = mutableListOf<Button>()
-        repeat(4) { index ->
-            val b = button("?", null)
-            b.textSize = 25f
-            b.setOnClickListener { checkAnswer(b.tag as Int) }
-            answerButtons.add(b)
-            (if (index < 2) choicesRow1 else choicesRow2).addView(b, weighted())
+        resultView = TextView(this).apply {
+            textSize = 42f
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+            setPadding(8, 0, 8, 8)
         }
-        root.addView(choicesRow1, matchWrap())
-        root.addView(choicesRow2, matchWrap())
-        choiceButtons = answerButtons
+        root.addView(resultView, matchWrap())
+
+        val row1 = row()
+        val row2 = row()
+        val buttons = mutableListOf<Button>()
+        repeat(4) { index ->
+            val b = button("?") { checkAnswer(bTag(it)) }
+            b.textSize = 25f
+            buttons.add(b)
+            (if (index < 2) row1 else row2).addView(b, weighted())
+        }
+        root.addView(row1, matchWrap())
+        root.addView(row2, matchWrap())
+        choiceButtons = buttons
+
+        val actionRow = row()
+        nextButton = button("Next question") { newQuestion() }
+        retryButton = button("Retry") { retryQuestion() }
+        skipButton = button("Skip") { newQuestion() }
+        actionRow.addView(nextButton, weighted())
+        actionRow.addView(retryButton, weighted())
+        actionRow.addView(skipButton, weighted())
+        root.addView(actionRow, matchWrap())
 
         scoreView = TextView(this).apply {
             textSize = 20f
@@ -130,53 +155,74 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             streak = 0
             level = 1
             prefs.edit().clear().apply()
-            feedbackView.text = "Progress reset"
             newQuestion()
         }, matchWrap())
     }
 
-    private lateinit var choiceButtons: List<Button>
+    private fun bTag(button: Button): Int = button.tag as Int
+
+    // The level limit applies to the answer/result, not independently to each operand.
+    private fun resultLimitExclusive(): Int = when (level) {
+        1 -> 10
+        2 -> 20
+        3 -> 50
+        4 -> 100
+        5 -> 200
+        6 -> 500
+        7 -> 1000
+        else -> 2000
+    }
 
     private fun newQuestion() {
         if (!::questionView.isInitialized) return
-        val max = when (level) {
-            1 -> 9
-            2 -> 19
-            3 -> 49
-            4 -> 99
-            else -> (level * 100) - 1
-        }
-        val op = if (operation == "Mixed") listOf("Addition", "Subtraction", "Multiplication", "Division").random() else operation
-        val a: Int
-        val b: Int
+        answered = false
+        val limit = resultLimitExclusive()
+        val maxAnswer = limit - 1
+        val op = if (operation == "Mixed") {
+            listOf("Addition", "Subtraction", "Multiplication", "Division").random()
+        } else operation
+
         when (op) {
             "Addition" -> {
-                a = Random.nextInt(1, max + 1); b = Random.nextInt(1, max + 1); answer = a + b
+                // Both operands are positive and the sum is always below the level limit.
+                val a = Random.nextInt(1, limit - 1)
+                val b = Random.nextInt(1, limit - a)
+                answer = a + b
                 questionView.text = "$a + $b = ?"
             }
             "Subtraction" -> {
-                a = Random.nextInt(1, max + 1); b = Random.nextInt(1, max + 1)
-                val high = maxOf(a, b); val low = minOf(a, b); answer = high - low
+                val high = Random.nextInt(1, limit)
+                val low = Random.nextInt(1, high + 1)
+                answer = high - low
                 questionView.text = "$high − $low = ?"
             }
             "Multiplication" -> {
-                val cap = minOf(max, if (level == 1) 9 else 12)
-                a = Random.nextInt(1, cap + 1); b = Random.nextInt(1, cap + 1); answer = a * b
+                val operandCap = minOf(if (level == 1) 9 else 12, maxAnswer)
+                var a: Int
+                var b: Int
+                do {
+                    a = Random.nextInt(1, operandCap + 1)
+                    b = Random.nextInt(1, operandCap + 1)
+                } while (a * b >= limit)
+                answer = a * b
                 questionView.text = "$a × $b = ?"
             }
             else -> {
-                b = Random.nextInt(1, minOf(max, 12) + 1)
-                answer = Random.nextInt(1, minOf(max, 12) + 1)
-                a = b * answer
-                questionView.text = "$a ÷ $b = ?"
+                // Keep division exact and its quotient below the level limit.
+                val quotientCap = minOf(12, maxAnswer)
+                val quotient = Random.nextInt(1, quotientCap + 1)
+                val divisor = Random.nextInt(1, minOf(12, maxAnswer) + 1)
+                answer = quotient
+                questionView.text = "${quotient * divisor} ÷ $divisor = ?"
             }
         }
+
         choices.clear()
         choices.add(answer)
         while (choices.size < 4) {
-            val spread = maxOf(5, max / 2)
+            val spread = maxOf(5, limit / 2)
             val candidate = (answer + Random.nextInt(-spread, spread + 1)).coerceAtLeast(0)
-            if (candidate !in choices) choices.add(candidate)
+            if (candidate < limit && candidate !in choices) choices.add(candidate)
         }
         choices.shuffle()
         choiceButtons.forEachIndexed { index, btn ->
@@ -185,28 +231,74 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             btn.isEnabled = true
         }
         feedbackView.text = if (language == "Hindi") "सही जवाब चुनो!" else "Choose the correct answer!"
-        scoreView.text = "⭐ $score     🔥 $streak     Level $level"
-        questionCount++
+        resultView.visibility = View.GONE
+        nextButton.visibility = View.GONE
+        retryButton.visibility = View.GONE
+        skipButton.visibility = View.GONE
+        scoreView.text = "⭐ $score     🔥 $streak     Level $level (answer < $limit)"
     }
 
     private fun checkAnswer(selected: Int) {
-        choiceButtons.forEach { it.isEnabled = false }
+        if (answered) return
         if (selected == answer) {
-            score += 1
-            streak += 1
-            val message = if (language == "Hindi") "शाबाश! बहुत अच्छा!" else "Great job! Correct!"
-            feedbackView.text = if (streak % 2 == 0) "$message 🏅 MEDAL!" else "$message ⭐"
-            speak(message)
-            if (streak % 2 == 0) speak(if (language == "Hindi") "तुम्हारा मेडल!" else "You earned a medal!")
+            answered = true
+            score++
+            streak++
+            choiceButtons.forEach { it.isEnabled = false }
+            val message = if (language == "Hindi") "शाबाश! सही जवाब!" else "Great job! Correct!"
+            val earnedMedal = streak % 2 == 0
+            feedbackView.text = if (earnedMedal) {
+                if (language == "Hindi") "बहुत खूब! तुम्हारा मेडल!" else "Amazing! You earned a medal!"
+            } else message
+            resultView.text = if (earnedMedal) "🏅" else "⭐"
+            resultView.visibility = View.VISIBLE
+            animateResult(medal = earnedMedal)
+            speak(if (earnedMedal) {
+                if (language == "Hindi") "शाबाश! तुम्हारा मेडल!" else "Great job! You earned a medal!"
+            } else message)
+            nextButton.visibility = View.VISIBLE
+            retryButton.visibility = View.GONE
+            skipButton.visibility = View.GONE
             prefs.edit().putInt("score", score).putInt("level", level).apply()
         } else {
             streak = 0
-            val message = if (language == "Hindi") "कोई बात नहीं। फिर कोशिश करो!" else "Not quite. Try again!"
-            feedbackView.text = "$message  Answer: $answer"
+            val message = if (language == "Hindi") "कोई बात नहीं। फिर कोशिश करो!" else "Not quite. Try again or skip."
+            feedbackView.text = message
+            resultView.text = "❌"
+            resultView.visibility = View.VISIBLE
+            animateResult(medal = false)
             speak(message)
+            retryButton.visibility = View.VISIBLE
+            skipButton.visibility = View.VISIBLE
+            nextButton.visibility = View.GONE
+            // Keep the answer choices enabled so the child can try again.
         }
-        scoreView.text = "⭐ $score     🔥 $streak     Level $level"
-        root.postDelayed({ newQuestion() }, 1300)
+        scoreView.text = "⭐ $score     🔥 $streak     Level $level (answer < ${resultLimitExclusive()})"
+    }
+
+    private fun retryQuestion() {
+        answered = false
+        resultView.visibility = View.GONE
+        feedbackView.text = if (language == "Hindi") "फिर से कोशिश करो!" else "Try again. You can do it!"
+        choiceButtons.forEach { it.isEnabled = true }
+        retryButton.visibility = View.GONE
+        skipButton.visibility = View.GONE
+    }
+
+    private fun animateResult(medal: Boolean) {
+        val scale = ScaleAnimation(
+            0.2f, 1.15f, 0.2f, 1.15f,
+            Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f
+        ).apply { duration = 450; repeatCount = 1; repeatMode = Animation.REVERSE }
+        val rotate = RotateAnimation(
+            if (medal) -25f else -8f, if (medal) 335f else 8f,
+            Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f
+        ).apply { duration = if (medal) 700 else 180; repeatCount = if (medal) 0 else 2 }
+        resultView.startAnimation(AnimationSet(true).apply {
+            addAnimation(scale)
+            addAnimation(rotate)
+            fillAfter = false
+        })
     }
 
     private fun row() = LinearLayout(this).apply {
@@ -214,7 +306,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         gravity = Gravity.CENTER
     }
 
-    private fun button(label: String, action: (() -> Unit)?): Button =
+    private fun button(label: String, action: (() -> Unit)? = null): Button =
         Button(this).apply {
             text = label
             textSize = 14f
