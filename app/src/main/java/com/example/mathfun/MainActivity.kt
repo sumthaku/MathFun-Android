@@ -170,10 +170,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         answerInput = EditText(this).apply {
             hint = if (language == "Hindi") "यहाँ जवाब लिखें" else "Type your answer"
-            textSize = 26f
+            textSize = 32f
             gravity = Gravity.CENTER
+            minHeight = 76
+            minimumHeight = 76
+            setPadding(16, 10, 16, 10)
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
             setSingleLine(true)
+            isFocusable = true
+            isFocusableInTouchMode = true
             background = rounded(Color.WHITE, 18f)
         }
         submitInputButton = colorButton("Submit", palette[0]) {
@@ -183,8 +188,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } else checkAnswer(typed)
         }
         inputRow = row()
-        inputRow.addView(answerInput, LinearLayout.LayoutParams(0, 64, 2f).apply { rightMargin = 8 })
-        inputRow.addView(submitInputButton, LinearLayout.LayoutParams(0, 64, 1f))
+        inputRow.addView(answerInput, LinearLayout.LayoutParams(0, 76, 3f).apply { rightMargin = 10 })
+        inputRow.addView(submitInputButton, LinearLayout.LayoutParams(0, 76, 1.5f))
         root.addView(inputRow, matchWrap())
 
         choiceArea = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -366,8 +371,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             btn.tag = choices[index]
             btn.isEnabled = true
         }
+        // Re-enable the typing controls after every answer so the numeric keypad works on the next question.
+        answerInput.isEnabled = true
+        submitInputButton.isEnabled = true
         answerInput.setText("")
-        answerInput.hint = if (language == "Hindi") "यहाँ जवाब लिखें" else "Type your answer"
+        answerInput.hint = if (language == "Hindi") "Type answer here" else "Type answer here"
+        answerInput.clearFocus()
         feedbackView.text = if (language == "Hindi") "सही जवाब चुनो!" else "Solve the question!"
         resultView.visibility = View.GONE
         nextButton.visibility = View.GONE
