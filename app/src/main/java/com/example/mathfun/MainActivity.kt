@@ -413,6 +413,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             resultView.text = "❌"
             resultView.setTextColor(Color.rgb(229, 57, 53))
             resultView.visibility = View.VISIBLE
+            root.setBackgroundColor(Color.RED)
+            root.postDelayed({ root.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Color.rgb(255, 249, 196), Color.rgb(225, 245, 254))).apply { cornerRadius = 24f } }, 600)
             animateResult(medal = false)
             speak(if (language == "Hindi") "फिर कोशिश करो!" else "Try again!")
             retryButton.visibility = View.VISIBLE
