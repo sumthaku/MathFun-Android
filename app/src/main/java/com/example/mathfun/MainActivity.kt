@@ -172,9 +172,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             hint = if (language == "Hindi") "यहाँ जवाब लिखें" else "Type your answer"
             textSize = 32f
             gravity = Gravity.CENTER
-            minHeight = 76
-            minimumHeight = 76
-            setPadding(16, 10, 16, 10)
+            minHeight = dp(76)
+            minimumHeight = dp(76)
+            setPadding(dp(16), dp(10), dp(16), dp(10))
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_SIGNED
             setSingleLine(true)
             isFocusable = true
@@ -188,8 +188,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } else checkAnswer(typed)
         }
         inputRow = row()
-        inputRow.addView(answerInput, LinearLayout.LayoutParams(0, 76, 3f).apply { rightMargin = 10 })
-        inputRow.addView(submitInputButton, LinearLayout.LayoutParams(0, 76, 1.5f))
+        inputRow.addView(answerInput, LinearLayout.LayoutParams(0, dp(76), 3f).apply { rightMargin = dp(10) })
+        inputRow.addView(submitInputButton, LinearLayout.LayoutParams(0, dp(76), 1.5f))
         root.addView(inputRow, matchWrap())
 
         choiceArea = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -461,6 +461,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             setPadding(6, 8, 6, 8)
             setOnClickListener { action?.invoke() }
         }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun matchWrap() = LinearLayout.LayoutParams(
         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
