@@ -10,6 +10,7 @@ import android.view.animation.Animation
 import android.view.animation.AnimationSet
 import android.view.animation.RotateAnimation
 import android.view.animation.ScaleAnimation
+import android.view.animation.TranslateAnimation
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.content.SharedPreferences
@@ -197,7 +198,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val row2 = row()
         val buttons = mutableListOf<Button>()
         repeat(4) { index ->
-            val b = colorButton("? ", palette[index])
+            val b = colorButton("? ", listOf(Color.rgb(178, 235, 242), Color.rgb(206, 196, 255), Color.rgb(165, 214, 167), Color.rgb(255, 235, 120))[index])
             b.setOnClickListener { checkAnswer(bTag(b)) }
             b.textSize = 26f
             buttons.add(b)
@@ -209,9 +210,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         choiceButtons = buttons
 
         val actionRow = row()
-        nextButton = colorButton("Next question", palette[1]) { newQuestion() }
+        nextButton = colorButton("Next question", Color.rgb(165, 214, 167)) { newQuestion() }
         retryButton = colorButton("Retry", palette[2]) { retryQuestion() }
-        skipButton = colorButton("Skip", palette[3]) { newQuestion() }
+        skipButton = colorButton("Skip", Color.rgb(255, 235, 120)) { newQuestion() }
         actionRow.addView(nextButton, weighted())
         actionRow.addView(retryButton, weighted())
         actionRow.addView(skipButton, weighted())
@@ -440,7 +441,14 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val rotate = RotateAnimation(if (medal) -25f else -8f, if (medal) 335f else 8f,
             Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f)
             .apply { duration = if (medal) 700 else 180; repeatCount = if (medal) 0 else 2 }
-        resultView.startAnimation(AnimationSet(true).apply { addAnimation(scale); addAnimation(rotate); fillAfter = false })
+        val drop = TranslateAnimation(0f, 0f, -dp(if (medal) 220 else 90).toFloat(), 0f)
+            .apply { duration = if (medal) 650 else 300; interpolator = android.view.animation.BounceInterpolator() }
+        resultView.startAnimation(AnimationSet(true).apply {
+            addAnimation(drop)
+            addAnimation(scale)
+            addAnimation(rotate)
+            fillAfter = false
+        })
     }
 
     private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
