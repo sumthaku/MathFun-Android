@@ -186,7 +186,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val row2 = row()
         val buttons = mutableListOf<Button>()
         repeat(4) { index ->
-            val b = colorButton("? ", palette[index]) { checkAnswer(bTag(it)) }
+            val b = colorButton("? ", palette[index])
+            b.setOnClickListener { checkAnswer(bTag(b)) }
             b.textSize = 26f
             buttons.add(b)
             (if (index < 2) row1 else row2).addView(b, weighted())
